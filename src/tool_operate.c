@@ -886,8 +886,11 @@ static CURLcode operate_do(struct GlobalConfig *global,
 
           /* new in libcurl 7.19.4 */
           my_setopt_str(curl, CURLOPT_NOPROXY, config->noproxy);
+
+          my_setopt(curl, CURLOPT_SUPPRESS_CONNECT_HEADERS,
+                    config->suppress_connect_headers?1L:0L);
         }
-#endif
+#endif /* !CURL_DISABLE_PROXY */
 
         my_setopt(curl, CURLOPT_FAILONERROR, config->failonerror?1L:0L);
         my_setopt(curl, CURLOPT_UPLOAD, uploadfile?1L:0L);
@@ -1014,6 +1017,7 @@ static CURLcode operate_do(struct GlobalConfig *global,
           my_setopt_str(curl, CURLOPT_CAINFO, config->cacert);
         if(config->proxy_cacert)
           my_setopt_str(curl, CURLOPT_PROXY_CAINFO, config->proxy_cacert);
+
         if(config->capath) {
           result = res_setopt_str(curl, CURLOPT_CAPATH, config->capath);
           if(result == CURLE_NOT_BUILT_IN) {
@@ -1024,10 +1028,22 @@ static CURLcode operate_do(struct GlobalConfig *global,
           else if(result)
             goto show_error;
         }
-        if(config->proxy_capath)
-          my_setopt_str(curl, CURLOPT_PROXY_CAPATH, config->proxy_capath);
-        else if(config->capath) /* CURLOPT_PROXY_CAPATH default is capath */
-          my_setopt_str(curl, CURLOPT_PROXY_CAPATH, config->capath);
+        /* For the time being if --proxy-capath is not set then we use the
+           --capath value for it, if any. See #1257 */
+        if(config->proxy_capath || config->capath) {
+          result = res_setopt_str(curl, CURLOPT_PROXY_CAPATH,
+                                  (config->proxy_capath ?
+                                   config->proxy_capath :
+                                   config->capath));
+          if(result == CURLE_NOT_BUILT_IN) {
+            if(config->proxy_capath) {
+              warnf(config->global,
+                    "ignoring --proxy-capath, not supported by libcurl\n");
+            }
+          }
+          else if(result)
+            goto show_error;
+        }
 
         if(config->crlfile)
           my_setopt_str(curl, CURLOPT_CRLFILE, config->crlfile);
@@ -1074,7 +1090,8 @@ static CURLcode operate_do(struct GlobalConfig *global,
           if(config->falsestart)
             my_setopt(curl, CURLOPT_SSL_FALSESTART, 1L);
 
-          my_setopt_enum(curl, CURLOPT_SSLVERSION, config->ssl_version);
+          my_setopt_enum(curl, CURLOPT_SSLVERSION,
+                         config->ssl_version | config->ssl_version_max);
           my_setopt_enum(curl, CURLOPT_PROXY_SSLVERSION,
                          config->proxy_ssl_version);
         }
@@ -1680,9 +1697,8 @@ static CURLcode operate_do(struct GlobalConfig *global,
           if(result == CURLE_SSL_CACERT)
             fprintf(global->errors, "%s%s%s",
                     CURL_CA_CERT_ERRORMSG1, CURL_CA_CERT_ERRORMSG2,
-                    ((config->proxy &&
-                      curl_strnequal(config->proxy, "https://", 8)) ?
-                     "HTTPS proxy has similar options --proxy-cacert "
+                    ((curlinfo->features & CURL_VERSION_HTTPS_PROXY) ?
+                     "HTTPS-proxy has similar options --proxy-cacert "
                      "and --proxy-insecure.\n" :
                      ""));
         }

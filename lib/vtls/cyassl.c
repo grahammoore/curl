@@ -149,6 +149,11 @@ cyassl_connect_step1(struct connectdata *conn,
   if(conssl->state == ssl_connection_complete)
     return CURLE_OK;
 
+  if(SSL_CONN_CONFIG(version_max) != CURL_SSLVERSION_MAX_NONE) {
+    failf(data, "CyaSSL does not support to set maximum SSL/TLS version");
+    return CURLE_SSL_CONNECT_ERROR;
+  }
+
   /* check to see if we've been told to use an explicit SSL/TLS version */
   switch(SSL_CONN_CONFIG(version)) {
   case CURL_SSLVERSION_DEFAULT:
@@ -736,7 +741,9 @@ void Curl_cyassl_session_free(void *ptr)
 
 size_t Curl_cyassl_version(char *buffer, size_t size)
 {
-#ifdef WOLFSSL_VERSION
+#if LIBCYASSL_VERSION_HEX >= 0x03006000
+  return snprintf(buffer, size, "wolfSSL/%s", wolfSSL_lib_version());
+#elif defined(WOLFSSL_VERSION)
   return snprintf(buffer, size, "wolfSSL/%s", WOLFSSL_VERSION);
 #elif defined(CYASSL_VERSION)
   return snprintf(buffer, size, "CyaSSL/%s", CYASSL_VERSION);

@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2016, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) 1998 - 2017, Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -695,13 +695,13 @@ CURLMcode curl_multi_remove_handle(struct Curl_multi *multi,
   if(data->easy_conn &&
      data->mstate > CURLM_STATE_DO &&
      data->mstate < CURLM_STATE_COMPLETED) {
+    /* Set connection owner so that the DONE function closes it.  We can
+       safely do this here since connection is killed. */
+    data->easy_conn->data = easy;
     /* If the handle is in a pipeline and has started sending off its
        request but not received its response yet, we need to close
        connection. */
     streamclose(data->easy_conn, "Removed with partial response");
-    /* Set connection owner so that the DONE function closes it.  We can
-       safely do this here since connection is killed. */
-    data->easy_conn->data = easy;
     easy_owns_conn = TRUE;
   }
 
@@ -959,10 +959,8 @@ CURLMcode curl_multi_fdset(struct Curl_multi *multi,
       if(s == CURL_SOCKET_BAD)
         /* this socket is unused, break out of loop */
         break;
-      else {
-        if((int)s > this_max_fd)
-          this_max_fd = (int)s;
-      }
+      if((int)s > this_max_fd)
+        this_max_fd = (int)s;
     }
 
     data = data->next; /* check next handle */
@@ -2277,8 +2275,7 @@ CURLMcode curl_multi_cleanup(struct Curl_multi *multi)
 
     return CURLM_OK;
   }
-  else
-    return CURLM_BAD_HANDLE;
+  return CURLM_BAD_HANDLE;
 }
 
 /*
@@ -2313,8 +2310,7 @@ CURLMsg *curl_multi_info_read(struct Curl_multi *multi, int *msgs_in_queue)
 
     return &msg->extmsg;
   }
-  else
-    return NULL;
+  return NULL;
 }
 
 /*
@@ -2575,7 +2571,7 @@ static CURLMcode multi_socket(struct Curl_multi *multi,
     /* or should we fall-through and do the timer-based stuff? */
     return result;
   }
-  else if(s != CURL_SOCKET_TIMEOUT) {
+  if(s != CURL_SOCKET_TIMEOUT) {
 
     struct Curl_sh_entry *entry = sh_getentry(&multi->sockhash, s);
 
