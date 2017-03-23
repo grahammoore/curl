@@ -67,7 +67,7 @@ CURLcode Curl_auth_create_plain_message(struct Curl_easy *data,
   size_t ulen;
   size_t plen;
   size_t plainlen;
-                                                                                                                                                                   const char *mailboxp;
+  const char *mailboxp;
   size_t mlen;
 
   *outlen = 0;
