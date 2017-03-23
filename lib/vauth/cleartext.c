@@ -67,14 +67,29 @@ CURLcode Curl_auth_create_plain_message(struct Curl_easy *data,
   size_t ulen;
   size_t plen;
   size_t plainlen;
+                                                                                                                                                                   const char *mailboxp;
+  size_t mlen;
 
   *outlen = 0;
   *outptr = NULL;
   ulen = strlen(userp);
   plen = strlen(passwdp);
 
-  /* Compute binary message length, checking for overflows. */
-  plainlen = 2 * ulen;
+  mailboxp = strchr(userp, '|');
+  if (mailboxp != NULL) {
+      ulen = mailboxp - userp;
+      mailboxp++;
+      mlen = strlen(mailboxp);
+  } else {
+      mailboxp = userp;
+      mlen = ulen;
+  }
+
+    /* Compute binary message length, checking for overflows. */
+  plainlen = mlen;
+  if(plainlen < mlen)
+      return CURLE_OUT_OF_MEMORY;
+  plainlen += ulen;
   if(plainlen < ulen)
     return CURLE_OUT_OF_MEMORY;
   plainlen += plen;
@@ -88,12 +103,12 @@ CURLcode Curl_auth_create_plain_message(struct Curl_easy *data,
   if(!plainauth)
     return CURLE_OUT_OF_MEMORY;
 
-  /* Calculate the reply */
-  memcpy(plainauth, userp, ulen);
-  plainauth[ulen] = '\0';
-  memcpy(plainauth + ulen + 1, userp, ulen);
-  plainauth[2 * ulen + 1] = '\0';
-  memcpy(plainauth + 2 * ulen + 2, passwdp, plen);
+    /* Calculate the reply */
+  memcpy(plainauth, mailboxp, mlen);
+  plainauth[mlen] = '\0';
+  memcpy(plainauth + mlen + 1, userp, ulen);
+  plainauth[mlen + ulen + 1] = '\0';
+  memcpy(plainauth + mlen + ulen + 2, passwdp, plen);
 
   /* Base64 encode the reply */
   result = Curl_base64_encode(data, plainauth, plainlen, outptr, outlen);
